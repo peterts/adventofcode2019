@@ -1,132 +1,138 @@
-
-def add(program, pointer, param_modes):
-    x = get_value_in_mode(program, pointer + 1, param_modes[0])
-    y = get_value_in_mode(program, pointer + 2, param_modes[1])
-    i_out = program[pointer + 3]
-    program[i_out] = x + y
-
-    if i_out == pointer:
-        return pointer
-    return pointer + 4
+from functools import partial
+from src.helpers import read_comma_separated_list
 
 
-def multiply(program, pointer, param_modes):
-    x = get_value_in_mode(program, pointer + 1, param_modes[0])
-    y = get_value_in_mode(program, pointer + 2, param_modes[1])
-    i_out = program[pointer + 3]
-    program[i_out] = x * y
-
-    if i_out == pointer:
-        return pointer
-    return pointer + 4
+STATE_RUNNING = 0
+STATE_WAITING = 1
+STATE_HALTED = 2
 
 
-def inp(program, pointer, param_modes):
-    x = int(input("Input:").strip())
-    i_out = program[pointer + 1]
-    program[i_out] = x
+class IntProgram:
+    def __init__(self, memory, n_params=3, n_op_digits=2, always_move_pointer=False):
+        self.n_params = n_params
+        self.n_op_digits = n_op_digits
+        self.always_move_pointer = always_move_pointer
 
-    if i_out == pointer:
-        return pointer
-    return pointer + 2
+        self.memory = list(memory)
+        self.pointer = 0
+        self.output = []
+        self.state = STATE_WAITING
 
+        self.inp = None
+        self.param_modes = None
+        self.operations = self.init_operations()
 
-def out(program, pointer, param_modes):
-    print(get_value_in_mode(program, pointer+1, param_modes[0]))
-    return pointer + 2
+    def init_operations(self):
+        return {opcode: partial(method, self) for opcode, method in operations}
 
+    def run(self, inp=None):
+        if inp is None:
+            inp = []
 
-def jump_if_true(program, pointer, param_modes):
-    x = get_value_in_mode(program, pointer + 1, param_modes[0])
-    y = get_value_in_mode(program, pointer + 2, param_modes[1])
-    if x:
-        return y
-    return pointer + 3
+        self.inp = inp
+        self.output = []
+        self.param_modes = [0] * self.n_params
 
+        self.state = STATE_RUNNING
 
-def jump_if_false(program, pointer, param_modes):
-    x = get_value_in_mode(program, pointer + 1, param_modes[0])
-    y = get_value_in_mode(program, pointer + 2, param_modes[1])
-    if not x:
-        return y
-    return pointer + 3
+        operator, self.param_modes = self.get_operator_and_param_modes()
+        while self.state == STATE_RUNNING:
+            self.operations[operator]()
+            operator, self.param_modes = self.get_operator_and_param_modes()
 
+        return self
 
-def less_than(program, pointer, param_modes):
-    x = get_value_in_mode(program, pointer + 1, param_modes[0])
-    y = get_value_in_mode(program, pointer + 2, param_modes[1])
-    i_out = program[pointer + 3]
-    program[i_out] = int(x < y)
+    def param(self, i, mode=None):
+        if mode is None:
+            mode = self.param_modes[i]
+        return self.memory[self.pointer+i+1] if mode else self.memory[self.memory[self.pointer+i+1]]
 
-    if i_out == pointer:
-        return pointer
-    return pointer + 4
+    def get_operator_and_param_modes(self):
+        operator = self.memory[self.pointer]
+        opertor_str = str(operator).zfill(self.n_params + self.n_op_digits)
+        return int(opertor_str[-self.n_op_digits:]), tuple(map(int, opertor_str[-self.n_op_digits - 1::-1]))
 
-
-def equals(program, pointer, param_modes):
-    x = get_value_in_mode(program, pointer + 1, param_modes[0])
-    y = get_value_in_mode(program, pointer + 2, param_modes[1])
-    i_out = program[pointer + 3]
-    program[i_out] = int(x == y)
-
-    if i_out == pointer:
-        return pointer
-    return pointer + 4
+    def move_pointer(self, i_out, steps):
+        if (i_out != self.pointer) or self.always_move_pointer:
+            self.pointer += steps
 
 
-def get_value_in_mode(program, pointer, mode):
-    if mode:
-        return program[pointer]
-    return program[program[pointer]]
+operations = set()
 
 
-operations2 = {
-    1: add, 2: multiply, 3: inp, 4: out, 5: jump_if_true, 6: jump_if_false,
-    7: less_than, 8: equals
-}
+def register_operation(opcode):
+    def register_operation_and_return_method(operation):
+        operations.add((opcode, operation))
+        return operation
+    return register_operation_and_return_method
 
 
-def compute(program):
-    pointer = 0
-    operator, param_modes = parse_operator(program[pointer])
-    while operator != 99:
-        pointer = operations2[operator](program, pointer, param_modes)
-        operator, param_modes = parse_operator(program[pointer])
+@register_operation(1)
+def add(self: IntProgram):
+    _run_3_param_op(self, lambda x, y: x + y)
 
 
-def parse_operator(operator):
-    opertor_str = str(operator).zfill(5)
-    return int(opertor_str[-2:]), (int(opertor_str[2]), int(opertor_str[1]), int(opertor_str[0]))
+@register_operation(2)
+def multiply(self: IntProgram):
+    _run_3_param_op(self, lambda x, y: x * y)
 
 
-def modify_two_first_input_positions_and_compute(program, noun, verb):
-    program[1] = noun
-    program[2] = verb
-    compute(program)
+@register_operation(3)
+def read_inp(self: IntProgram):
+    i_out = self.param(0, 1)
+    if not self.inp:
+        self.state = STATE_WAITING
+        return
+    self.memory[i_out] = self.inp.pop(0)
+    self.move_pointer(i_out, 2)
 
 
-def modify_two_first_input_positions_to_get_desired_output(program, desired_output):
-    for noun in range(99):
-        for verb in range(99):
-            program_copy = list(program)
-            try:
-                modify_two_first_input_positions_and_compute(program_copy, noun, verb)
-            except KeyError:
-                continue
-            if program_copy[0] == desired_output:
-                return 100 * noun + verb
-    return None
+@register_operation(4)
+def write_out(self: IntProgram):
+    self.output.append(self.param(0))
+    self.pointer += 2
+
+
+@register_operation(5)
+def jump_if_true(self: IntProgram):
+    _jump(self, True)
+
+
+@register_operation(6)
+def jump_if_false(self: IntProgram):
+    _jump(self, False)
+
+
+@register_operation(7)
+def less_than(self: IntProgram):
+    _run_3_param_op(self, lambda x, y: int(x < y))
+
+
+@register_operation(8)
+def equals(self: IntProgram):
+    _run_3_param_op(self, lambda x, y: int(x == y))
+
+
+@register_operation(99)
+def halt(self: IntProgram):
+    self.state = STATE_HALTED
+
+
+def _run_3_param_op(self: IntProgram, op):
+    i_out = self.param(2, 1)
+    self.memory[i_out] = op(self.param(0), self.param(1))
+    self.move_pointer(i_out, 4)
+
+
+def _jump(self: IntProgram, jump_if):
+    self.pointer = self.param(1) if bool(self.param(0)) == jump_if else self.pointer + 3
 
 
 if __name__ == '__main__':
-    # with open("../input/int_program.txt") as f:
-    #     test_program = list(map(int, f.read().split(",")))
-    # test_desired_output = 19690720
-    # print(modify_two_first_input_positions_to_get_desired_output(list(test_program), test_desired_output))
+    memory = read_comma_separated_list("int_program2.txt", int)
+    program = IntProgram(memory)
+    print(program.run([5]).output)
 
-    with open("../input/int_program2.txt") as f:
-        program_str = f.read()
 
-    # program_str = "3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99"
-    test_program = list(map(int, program_str.split(",")))
-    compute(test_program)
+
+
