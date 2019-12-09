@@ -30,7 +30,7 @@ class IntProgram:
         if inp is None:
             inp = []
 
-        self.inp = inp
+        self.inp = list(inp)
         self.output = []
         self.param_modes = [0] * self.n_params
 
@@ -39,8 +39,6 @@ class IntProgram:
         operator, self.param_modes = self.get_operator_and_param_modes()
         while self.state == STATE_RUNNING:
             self.operations[operator]()
-            if operator == 203:
-                print(self.pointer, operator)
             operator, self.param_modes = self.get_operator_and_param_modes()
 
         return self
@@ -98,7 +96,7 @@ def read_inp(self: IntProgram):
     if not self.inp:
         self.state = STATE_WAITING
         return
-    self.move_pointer(self.set_param(2, self.inp.pop(0)), 2)
+    self.move_pointer(self.set_param(0, self.inp.pop(0)), 2)
 
 
 @register_operation(4)
@@ -149,5 +147,5 @@ def _jump(self: IntProgram, jump_if):
 if __name__ == '__main__':
     memory = read_comma_separated_list("int_program3.txt", int)
     program = IntProgram(memory)
-    program.run([1])
+    program.run([2])
     print(program.output)

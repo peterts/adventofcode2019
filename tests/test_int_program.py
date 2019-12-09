@@ -41,7 +41,7 @@ def test_correct_diagnostic_code_after_input():
       999, 1105, 1, 46, 1101, 1000, 1, 20, 4, 20, 1105, 1, 46, 98, 99], 9, 1001),
 ])
 def test_other_programs(memory, inp, expected_out):
-    program = IntProgram(memory, always_move_pointer=False)
+    program = IntProgram(memory)
     program.run([inp])
     assert program.output[-1] == expected_out
 
