@@ -54,19 +54,26 @@ class IntProgram:
             return 0
         return self.memory[i]
 
-    def param(self, i, mode=None):
-        if mode is None:
-            mode = self.param_modes[i]
-
-        i = self.pointer + i + 1
-        if mode == 0:
+    def get_param(self, j):
+        i = self.pointer + j + 1
+        if self.param_modes[j] == 0:
             i = self.get_from_memory(i)
             return self.get_from_memory(i)
-        elif mode == 1:
+        elif self.param_modes[j] == 1:
             return self.get_from_memory(i)
-        elif mode == 2:
+        elif self.param_modes[j] == 2:
             i = self.get_from_memory(i)
             return self.get_from_memory(self.relative_base + i)
+
+    def set_param(self, j, value):
+        i = self.get_from_memory(self.pointer + j + 1)
+        if self.param_modes[j] == 0:
+            self.set_memory(i, value)
+            return i
+        elif self.param_modes[j] == 2:
+            self.set_memory(self.relative_base + i, value)
+            return self.relative_base + i
+        raise ValueError
 
     def get_operator_and_param_modes(self):
         operator = self.memory[self.pointer]
@@ -101,17 +108,15 @@ def multiply(self: IntProgram):
 
 @register_operation(3)
 def read_inp(self: IntProgram):
-    i_out = self.param(0, 1)
     if not self.inp:
         self.state = STATE_WAITING
         return
-    self.set_memory(i_out, self.inp.pop(0))
-    self.move_pointer(i_out, 2)
+    self.move_pointer(self.set_param(2, self.inp.pop(0)), 2)
 
 
 @register_operation(4)
 def write_out(self: IntProgram):
-    self.output.append(self.param(0))
+    self.output.append(self.get_param(0))
     self.pointer += 2
 
 
@@ -137,7 +142,7 @@ def equals(self: IntProgram):
 
 @register_operation(9)
 def adjust_relative_base(self: IntProgram):
-    self.relative_base += self.param(0, 1)
+    self.relative_base += self.get_param(0)
     self.pointer += 2
 
 
@@ -147,13 +152,11 @@ def halt(self: IntProgram):
 
 
 def _run_3_param_op(self: IntProgram, op):
-    i_out = self.param(2, 1)
-    self.set_memory(i_out, op(self.param(0), self.param(1)))
-    self.move_pointer(i_out, 4)
+    self.move_pointer(self.set_param(2, op(self.get_param(0), self.get_param(1))), 4)
 
 
 def _jump(self: IntProgram, jump_if):
-    self.pointer = self.param(1) if bool(self.param(0)) == jump_if else self.pointer + 3
+    self.pointer = self.get_param(1) if bool(self.get_param(0)) == jump_if else self.pointer + 3
 
 
 def fix_memory(memory, wrong_opcode):
@@ -169,15 +172,9 @@ def fix_memory(memory, wrong_opcode):
 
 if __name__ == '__main__':
     memory = read_comma_separated_list("int_program3.txt", int)
-    memory = (109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99)
+    # memory = (109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99)
     # print(memory)
 
-    output = None
-    while output is None or len(output) == 2:
-        program = IntProgram(memory)
-        program.run([1])
-        output = program.output
-        break
-        memory = fix_memory(memory, output[0])
-
-    print(output)
+    program = IntProgram(memory)
+    program.run([2])
+    print(program.output)
