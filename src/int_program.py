@@ -1,5 +1,6 @@
 from functools import partial
 from src.helpers import read_comma_separated_list
+from collections import defaultdict
 
 STATE_RUNNING = 0
 STATE_WAITING = 1
@@ -12,7 +13,7 @@ class IntProgram:
         self.n_op_digits = n_op_digits
         self.always_move_pointer = always_move_pointer
 
-        self.memory = list(memory)
+        self.memory = defaultdict(int, enumerate(memory))
         self.relative_base = 0
         self.pointer = 0
         self.output = []
@@ -44,36 +45,22 @@ class IntProgram:
 
         return self
 
-    def set_memory(self, i, value):
-        if len(self.memory) <= i:
-            self.memory += [0] * (i - len(self.memory) + 1)
-        self.memory[i] = value
-
-    def get_from_memory(self, i):
-        if i >= len(self.memory):
-            return 0
-        return self.memory[i]
-
     def get_param(self, j):
-        i = self.pointer + j + 1
-        if self.param_modes[j] == 0:
-            i = self.get_from_memory(i)
-            return self.get_from_memory(i)
-        elif self.param_modes[j] == 1:
-            return self.get_from_memory(i)
-        elif self.param_modes[j] == 2:
-            i = self.get_from_memory(i)
-            return self.get_from_memory(self.relative_base + i)
+        return self.memory[self.param_address(j)]
 
     def set_param(self, j, value):
-        i = self.get_from_memory(self.pointer + j + 1)
+        adr = self.param_address(j)
+        self.memory[adr] = value
+        return adr
+
+    def param_address(self, j):
+        i = self.pointer + j + 1
         if self.param_modes[j] == 0:
-            self.set_memory(i, value)
+            return self.memory[i]
+        elif self.param_modes[j] == 1:
             return i
         elif self.param_modes[j] == 2:
-            self.set_memory(self.relative_base + i, value)
-            return self.relative_base + i
-        raise ValueError
+            return self.memory[i] + self.relative_base
 
     def get_operator_and_param_modes(self):
         operator = self.memory[self.pointer]
@@ -159,22 +146,8 @@ def _jump(self: IntProgram, jump_if):
     self.pointer = self.get_param(1) if bool(self.get_param(0)) == jump_if else self.pointer + 3
 
 
-def fix_memory(memory, wrong_opcode):
-    n_instructions = {
-        1: 3, 2: 3, 3: 1, 4: 1, 5: 2, 6: 2, 7: 3, 8: 3, 9: 1, 99: 0
-    }
-    operator = int(str(wrong_opcode).zfill(2)[-2:])
-    while wrong_opcode in memory:
-        i = memory.index(wrong_opcode)
-        memory = memory[:i] + memory[i+n_instructions[operator]:]
-    return memory
-
-
 if __name__ == '__main__':
     memory = read_comma_separated_list("int_program3.txt", int)
-    # memory = (109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99)
-    # print(memory)
-
     program = IntProgram(memory)
-    program.run([2])
+    program.run([1])
     print(program.output)

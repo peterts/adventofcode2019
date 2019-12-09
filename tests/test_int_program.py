@@ -12,7 +12,7 @@ from src.helpers import read_comma_separated_list
 def test_compute(memory, memory_after_compute):
     program = IntProgram(memory, always_move_pointer=True)
     program.run()
-    assert program.memory == memory_after_compute
+    assert list(program.memory.values()) == memory_after_compute
 
 
 def test_correct_diagnostic_code_after_input():
