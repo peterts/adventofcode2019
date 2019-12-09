@@ -51,3 +51,22 @@ def test_correct_diagnostic_code_after_input_2():
     program = IntProgram(memory, always_move_pointer=False)
     program.run([5])
     assert program.output[-1] == 15724522
+
+
+def test_int_program_with_relative_base():
+    memory = [109, 1, 204, -1, 1001, 100, 1, 100, 1008, 100, 16, 101, 1006, 101, 0, 99]
+    program = IntProgram(memory)
+    program.run()
+    assert program.output == memory
+
+    memory = [1102, 34915192, 34915192, 7, 4, 7, 99, 0]
+    program = IntProgram(memory)
+    program.run()
+    assert len(program.output) == 1
+    assert len(str(program.output[0])) == 16
+
+    memory = [104, 1125899906842624, 99]
+    program = IntProgram(memory)
+    program.run()
+    assert len(program.output) == 1
+    assert program.output[0] == memory[1]
