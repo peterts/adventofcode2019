@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-from sortedcontainers import SortedList
 from heapq import heappush
 from math import sqrt, atan2, pi
+from cmath import phase
 
 
 @dataclass
@@ -28,28 +28,11 @@ def is_between(a, b, c):
     return True
 
 
-def dist(a, b):
-    return sqrt((a.x - b.x)**2 + (a.y - b.y)**2)
-
-
-def deg(a, b):
-    dot = a.x * b.x + a.y * b.y  # dot product
-    det = a.x * b.y - a.y * b.x  # determinant
-    print(atan2(det, dot))  # atan2(y, x) or atan2(sin, cos)
-    return atan2(det, dot)
-
-
 def angle(v1, v2):
-    x1, y1 = v1
-    x2, y2 = v2
-    dot = x1 * x2 + y1 * y2  # dot product
-    det = x1 * y2 - y1 * x2  # determinant
-    angle = atan2(det, dot)  # atan2(y, x) or atan2(sin, cos)
-    if angle < 0:
-        return angle % (2*pi)
-    if x2 < 0:
-        return 2*pi - angle
-    return angle
+    ang = phase(complex(*v1)) - phase(complex(*v2))
+    if ang < 0:
+        return 2*pi + ang
+    return ang
 
 
 def get_all_visible_from_ast_ordered_by_degree(ast, ast_map):
@@ -61,6 +44,8 @@ def get_all_visible_from_ast_ordered_by_degree(ast, ast_map):
                 asteroids.append((i, j))
 
     visible_from_ast = []
+    degs = []
+
     for ast2 in asteroids:
         if ast == ast2:
             continue
@@ -70,15 +55,17 @@ def get_all_visible_from_ast_ordered_by_degree(ast, ast_map):
             if is_between(Point(*ast), Point(*ast2), Point(*ast3)):
                 break
         else:
-            v = ast2[1] - ast[1], ast2[0] - ast[0]
+            v = ast2[1] - ast[1], ast[0] - ast2[0]
             d = angle((0, 1), v)
-            print(d)
-            heappush(visible_from_ast, (d, ast2))
+            visible_from_ast.append(ast2)
+            degs.append(d)
 
     if not visible_from_ast:
         return []
-    _, visible_from_ast_list = zip(*visible_from_ast)
-    return visible_from_ast_list
+    ix = sorted(range(len(visible_from_ast)), key=lambda i: degs[i])
+    print([degs[i] for i in ix])
+    print(len(set(degs)) == len(list(degs)))
+    return [visible_from_ast[i] for i in ix]
 
 
 if __name__ == '__main__':
@@ -119,29 +106,6 @@ if __name__ == '__main__':
 ....#...##.##.##......#..#..##....
     """
 
-    inp = """
-.#..##.###...#######
-##.############..##.
-.#.######.########.#
-.###.#######.####.#.
-#####.##.#.##.###.##
-..#####..#.#########
-####################
-#.####....###.#.#.##
-##.#################
-#####.##.###..####..
-..######..##.#######
-####.##.####...##..#
-.#####..#.######.###
-##...#.##########...
-#.##########.#######
-.####.#.###.###.#.##
-....##.##.###..#####
-.#.#.###########.###
-#.#.#.#####.####.###
-###.##.####.##.#..##
-    """
-
     ast_map = []
     for row in inp.splitlines():
         if row.strip():
@@ -154,24 +118,26 @@ if __name__ == '__main__':
             if ast_map[i][j]:
                 asteroids.append((i, j))
 
-    ast = (13, 11)
+    ast = (28, 26)
     destroyed = []
     visible = get_all_visible_from_ast_ordered_by_degree(ast, ast_map)
+    print(len(visible))
     while visible:
-        print(len(visible))
         for other_ast in visible:
             destroyed.append(other_ast)
             x, y = other_ast
             ast_map[x][y] = False
         visible = get_all_visible_from_ast_ordered_by_degree(ast, ast_map)
 
-    print(destroyed[0:10])
-    print(destroyed[200])
+    print(destroyed[0:3])
+    print(destroyed[9])
+    print(destroyed[19])
+    print(destroyed[49])
+    print(destroyed[199])
     print(destroyed[190:210])
     print((2, 8) in destroyed)
 
-    print(destroyed[200][0] * 100 + destroyed[200][1])
-
+    print(destroyed[199][1] * 100 + destroyed[199][0])
 
 
 
