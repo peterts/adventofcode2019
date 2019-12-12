@@ -67,6 +67,14 @@ def step(moons):
         moon.update()
 
 
+def is_repeat(moons, history, i):
+    for old_moons in history:
+        if all(old_moon.position[i] == moon.position[i] for old_moon, moon in zip(moons, old_moons)) and \
+                all(old_moon.velocity[i] == moon.veolicty[i] for old_moon, moon in zip(moons, old_moons)):
+            return True
+    return False
+
+
 if __name__ == '__main__':
     moons_str = """
 <x=-1, y=0, z=2>
