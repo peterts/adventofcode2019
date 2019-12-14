@@ -26,6 +26,11 @@ class IntProgram:
     def init_operations(self):
         return {opcode: partial(method, self) for opcode, method in operations}
 
+    def restart(self):
+        self.pointer = 0
+        self.relative_base = 0
+        self.state = STATE_WAITING
+
     def run(self, inp=None):
         if inp is None:
             inp = []

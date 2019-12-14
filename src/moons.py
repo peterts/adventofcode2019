@@ -3,7 +3,7 @@ import numpy as np
 import re
 from copy import deepcopy
 import math
-
+from src.helpers import read
 
 @dataclass
 class Moon:
@@ -97,15 +97,9 @@ def parse_moons_str(moons_str):
 
 
 if __name__ == '__main__':
-    moons_str = """
-<x=-8, y=-10, z=0>
-<x=5, y=5, z=10>
-<x=2, y=-7, z=3>
-<x=9, y=-8, z=-3>
-    """
-
+    moons_str = read("moons2.txt")
     moons = parse_moons_str(moons_str)
-    print(find_total_energy_after_n_steps(moons, 100))
+    print(find_total_energy_after_n_steps(moons, 1000))
     print(find_cycle_time(moons))
 
 
