@@ -23,8 +23,7 @@ def parse_reactions(reactions_str):
 class MaterialFactory:
     def __init__(self, reactions):
         self.reactions = reactions
-        self.produced = defaultdict(int)
-        self.required = defaultdict(int)
+        self.leftover = defaultdict(int)
         self.cost = 0
 
     def produce(self, material, amount):
@@ -33,13 +32,12 @@ class MaterialFactory:
             return
 
         produced_by_one_reaction, reaction = self.reactions[material]
-        self.required[material] += amount
-        n_to_produce = ceil((self.required[material] - self.produced[material]) / produced_by_one_reaction)
+        n_to_produce = ceil((amount - self.leftover[material]) / produced_by_one_reaction)
         if n_to_produce > 0:
             for child_material, child_amount in reaction:
                 self.produce(child_material, n_to_produce * child_amount)
 
-        self.produced[material] += n_to_produce * produced_by_one_reaction
+        self.leftover[material] += n_to_produce * produced_by_one_reaction - amount
 
 
 if __name__ == '__main__':
