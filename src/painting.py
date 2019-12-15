@@ -3,6 +3,7 @@ from src.helpers import read_comma_separated_list
 from collections import defaultdict
 import numpy as np
 from matplotlib import pylab as pt
+from src.helpers import plot
 
 
 new_direction = {
@@ -37,16 +38,8 @@ if __name__ == '__main__':
         direction = new_direction[(direction, program.output[1])]
         i, j = move_one_step_in_direction[direction](i, j)
 
-    all_i, all_j = zip(*painting.keys())
-    arr = np.zeros((max(all_i)+1, max(all_j)+1))
+    plot(painting)
 
-    for i, j in painting:
-        print(i, j)
-        arr[i][j] = painting[(i, j)]
-
-    print(arr)
-    pt.imshow(arr)
-    pt.show()
 
 
 

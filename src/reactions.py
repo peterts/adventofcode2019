@@ -49,6 +49,7 @@ if __name__ == '__main__':
 
     n = 1
     budget = 1000000000000
+
     while factory.cost < budget:
         n += 1
         factory.produce("FUEL", 1)
