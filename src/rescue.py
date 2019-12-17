@@ -1,22 +1,6 @@
 from src.helpers import read_comma_separated_list, clean_lines_iter
 from src.int_program import IntProgram
-from itertools import chain
-from collections import Counter
 import re
-
-
-def is_intersection(lines, i, j, n, m):
-    if i < 1 or i > n - 2 or j < 1 or j > m - 2:
-        return False
-    return all(lines[k][l] == "#" for k, l in ((i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1)))
-
-
-new_direction = {
-    ("U", 0): "L", ("U", 1) : "R",
-    ("D", 0): "R", ("D", 1): "L",
-    ("R", 0): "U", ("R", 1): "D",
-    ("L", 0): "D", ("L", 1): "U",
-}
 
 move_one_step_in_direction = {
     "R": lambda i, j: (i, j+1),
@@ -28,119 +12,132 @@ move_one_step_in_direction = {
 TURN_RIGHT = {"U": "R", "R": "D", "D": "L", "L": "U"}
 TURN_LEFT = dict((v, k) for k, v in TURN_RIGHT.items())
 
-
-def can_move(lines, i, j, direction):
-    k, l = move_one_step_in_direction[direction](i, j)
-    return -1 < k < n and -1 < l < m and lines[k][l] == "#"
+SUB_PATH_PATTERN = r"^(.{1,21})\1*(.{1,21})(?:\1|\2)*(.{1,21})(?:\1|\2|\3)*$"
 
 
-# def split_operations(operations_str, seq):
-#     prev_match = None
-#     splits = []
-#     for match in re.finditer(f"(?=({seq}))", operations_str):
-#         if prev_match is not None:
-#         pass
+def is_intersection(lines, i, j, n, m):
+    if i < 1 or i > n - 2 or j < 1 or j > m - 2:
+        return False
+    return all(lines[k][l] == "#" for k, l in ((i, j), (i-1, j), (i+1, j), (i, j-1), (i, j+1)))
 
 
-def to_command(func):
-    print(len(','.join(re.findall(r"(?:[A-Z]|\d+)", func))))
-    return list(map(ord, ','.join(re.findall(r"(?:[A-Z]|\d+)", func)))) + [10]
-
-
-if __name__ == '__main__':
-    memory = read_comma_separated_list("rescue.txt", int)
+def get_scaffold_map(memory):
     program = IntProgram(memory)
     program.run()
-    s = ''.join(map(chr, program.output))
+    return ''.join(map(chr, program.output))
 
-    lines = list(clean_lines_iter(s))
-    n = len(lines)
-    m = None
+
+def get_sum_of_intersection_coord_products(scaffold_map_lines):
+    n = len(scaffold_map_lines)
+    m = len(scaffold_map_lines[0])
 
     intersections = []
 
-    robot_or_scaffold = "#>^v<"
-
-    robot = None
-    n_scaffolds = 0
-
-    for i, line in enumerate(lines):
-        if m is None:
-            m = len(line)
+    for i, line in enumerate(scaffold_map_lines):
         for j, c in enumerate(line):
-            if lines[i][j] in robot_or_scaffold:
-                n_scaffolds += 1
-                if robot_or_scaffold.index(lines[i][j]) > 0:
-                    robot = (i, j)
-
-            if is_intersection(lines, i, j, n, m):
+            if is_intersection(scaffold_map_lines, i, j, n, m):
                 intersections.append(i*j)
 
-    print(n_scaffolds)
-    print(s)
+    return sum(intersections)
 
-    i, j = robot
-    direction = "UDLR"["^v<>".index(lines[i][j])]
+
+def find_robot(scaffold_map_lines):
+    for i, line in enumerate(scaffold_map_lines):
+        for j, c in enumerate(line):
+            if c in ">^v<":
+                return i, j
+    return None
+
+
+def get_num_scaffolds(scaffold_map_lines):
+    return len(re.findall(f'[{re.escape("#^v<>")}]', ''.join(scaffold_map_lines)))
+
+
+def get_robot_path(scaffold_map_lines):
+    n = len(scaffold_map_lines)
+    m = len(scaffold_map_lines[0])
+
+    i, j = find_robot(scaffold_map_lines)
+
+    n_scaffolds = get_num_scaffolds(scaffold_map_lines)
+
+    direction = "UDLR"["^v<>".index(scaffold_map_lines[i][j])]
     visited = {(i, j)}
 
     operations = []
 
+    def can_move(_direction):
+        k, l = move_one_step_in_direction[_direction](i, j)
+        return -1 < k < n and -1 < l < m and scaffold_map_lines[k][l] == "#"
+
     steps = 0
+
     while len(visited) < n_scaffolds:
-        if can_move(lines, i, j, direction):
+        if can_move(direction):
             steps += 1
+
         else:
             if steps > 0:
                 operations.append(steps+1)
             steps = 0
 
-            if can_move(lines, i, j, TURN_RIGHT[direction]):
+            if can_move(TURN_RIGHT[direction]):
                 direction = TURN_RIGHT[direction]
                 operations.append("R")
-            elif can_move(lines, i, j, TURN_LEFT[direction]):
+
+            elif can_move(TURN_LEFT[direction]):
                 direction = TURN_LEFT[direction]
                 operations.append("L")
+
             else:
-                direction = TURN_RIGHT[TURN_RIGHT[direction]]
-                operations.append("R")
-                operations.append("R")
+                raise RuntimeError("Something went wrong")
 
         i, j = move_one_step_in_direction[direction](i, j)
         visited.add((i, j))
 
     if steps > 0:
         operations.append(steps+1)
-    steps = 0
 
-    operations_str = ' '.join(''.join(map(str, x)) for x in zip(operations[::2], operations[1::2]))
+    return operations
+
+
+def get_sub_paths(path):
+    path_str = ",".join(map(str, path))
+    match = re.match(SUB_PATH_PATTERN, path_str + ",")
+
+    sub_paths = []
+    for i in range(1, 4):
+        sub_paths.append(match.group(i)[:-1])
+
+    for p, c in zip(sub_paths, ("A", "B", "C")):
+        path_str = path_str.replace(p, c)
+
+    return path_str, sub_paths
+
+
+def path_to_command(path):
+    return list(map(ord, path)) + [10]
+
+
+if __name__ == '__main__':
+    memory = read_comma_separated_list("rescue.txt", int)
+    program = IntProgram(memory)
+    program.run()
+
+    scaffold_map = get_scaffold_map(memory)
+    scaffold_map_lines = list(clean_lines_iter(scaffold_map))
+
+    print(get_sum_of_intersection_coord_products(scaffold_map_lines))
+
+    path = get_robot_path(scaffold_map_lines)
+    main_path, sub_paths = get_sub_paths(path)
 
     memory[0] = 2
     program = IntProgram(memory)
 
-    A = "L6 R12 L6 L8 L8"
-    B = "L4 L4 L6"
-    C = "L6 R12 R8 L8"
-
-    print(operations_str)
-    operations_str = operations_str.replace(A, "A")
-    print(operations_str)
-    operations_str = operations_str.replace(B, "B")
-    print(operations_str)
-    operations_str = operations_str.replace(C, "C")
-    print(operations_str)
-
-    program.memory[0] = 2
-    print(program.state)
-
-    program.run(to_command(operations_str))
-    print(program.state)
-    program.run(to_command(A))
-    print(program.state)
-    program.run(to_command(B))
-    print(program.state)
-    program.run(to_command(C))
-    print(program.state)
+    program.run(path_to_command(main_path))
+    for sub_path in sub_paths:
+        program.run(path_to_command(sub_path))
     program.run([ord('n'), 10])
-    print(program.state)
-    print(program.output)
 
+    print(program.output[-1])
