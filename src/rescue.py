@@ -1,8 +1,6 @@
 from src.helpers import read_comma_separated_list, clean_lines_iter
 from src.int_program import IntProgram
-import networkx as nx
-import dwave_networkx as dnx
-import dimod
+from itertools import chain
 
 
 def is_intersection(lines, i, j, n, m):
@@ -32,6 +30,10 @@ TURN_LEFT = dict((v, k) for k, v in TURN_RIGHT.items())
 def can_move(lines, i, j, direction):
     k, l = move_one_step_in_direction[direction](i, j)
     return -1 < k < n and -1 < l < m and lines[k][l] == "#"
+
+
+def expand_operations(operations):
+    return list(chain.from_iterable(x * count for x, count in zip(operations[::2], operations[1::2])))
 
 
 if __name__ == '__main__':
@@ -77,12 +79,12 @@ if __name__ == '__main__':
 
     i, j = robot
     direction = "UDLR"["^v<>".index(lines[i][j])]
-    n_visited = 1
+    visited = {(i, j)}
 
     operations = []
 
     steps = 0
-    while n_visited < n_scaffolds:
+    while len(visited) < n_scaffolds:
         if can_move(lines, i, j, direction):
             steps += 1
         else:
@@ -102,10 +104,15 @@ if __name__ == '__main__':
                 operations.append("R")
 
         i, j = move_one_step_in_direction[direction](i, j)
+        visited.add((i, j))
 
-        n_visited += 1
+    if steps > 0:
+        operations.append(steps)
+    steps = 0
 
     print(operations)
+    print(set([''.join(map(str, x)) for x in zip(operations[::2], operations[1::2])]))
+    print(expand_operations(operations))
 
     # graph = graph.to_undirected()
     #
