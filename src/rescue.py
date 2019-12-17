@@ -25,8 +25,8 @@ move_one_step_in_direction = {
     "D": lambda i, j: (i+1, j)
 }
 
-rotate = {"U": "R", "R": "D", "D": "L", "L": "U"}
-rotate_counter = dict((v, k) for k, v in rotate.items())
+TURN_RIGHT = {"U": "R", "R": "D", "D": "L", "L": "U"}
+TURN_LEFT = dict((v, k) for k, v in TURN_RIGHT.items())
 
 
 def can_move(lines, i, j, direction):
@@ -81,21 +81,26 @@ if __name__ == '__main__':
 
     operations = []
 
+    steps = 0
     while n_visited < n_scaffolds:
         if can_move(lines, i, j, direction):
-            pass
-        elif can_move(lines, i, j, rotate[direction]):
-            direction = rotate[direction]
-            operations.append("ROT")
-        elif can_move(lines, i, j, rotate_counter[direction]):
-            direction = rotate_counter[direction]
-            operations.append("ROT_COUNTER")
+            steps += 1
         else:
-            direction = rotate[rotate[direction]]
-            operations.append("ROT")
-            operations.append("ROT")
+            if steps > 0:
+                operations.append(steps)
+            steps = 0
 
-        operations.append(direction)
+            if can_move(lines, i, j, TURN_RIGHT[direction]):
+                direction = TURN_RIGHT[direction]
+                operations.append("R")
+            elif can_move(lines, i, j, TURN_LEFT[direction]):
+                direction = TURN_LEFT[direction]
+                operations.append("L")
+            else:
+                direction = TURN_RIGHT[TURN_RIGHT[direction]]
+                operations.append("R")
+                operations.append("R")
+
         i, j = move_one_step_in_direction[direction](i, j)
 
         n_visited += 1
