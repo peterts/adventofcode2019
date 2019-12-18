@@ -100,14 +100,17 @@ def search(world: World, state: State):
         visisted.add(pos)
 
         if pos in world.doors:
-            door = world.get(pos).lower()
+            door = world.get(pos)
             if door not in state.has_keys:
                 continue
             elif door not in state.opened_doors:
                 heappush(doors_that_can_be_opened, (dist, pos))
+                continue
 
-        elif pos in world.keys and world.get(pos) not in state.has_keys:
-            heappush(new_keys, (dist, pos))
+        elif pos in world.keys:
+            if world.get(pos) not in state.has_keys:
+                heappush(new_keys, (dist, pos))
+                continue
 
         for connected_pos in world.passage[pos]:
             if connected_pos in visisted:
