@@ -62,59 +62,56 @@ def _get(arr, pos):
 INF = 1e9
 
 
-@dataclass(eq=True, frozen=True)
-class Node:
-    val: str
-    keys: tuple = field(default_factory=frozenset)
-    lowest_cost: int = field(compare=False, default_factory=lambda: INF)
-
-    def copy_replace_cost(self, new_cost):
-        return Node(self.val, self.keys, new_cost)
-
-    def copy_and_add_own_val(self):
-        if self.val in self.keys:
-            return self
-        return Node(self.val, (*self.keys, self.val), self.lowest_cost)
-
-    def __lt__(self, other):
-        return self.lowest_cost < other.lowest_cost
-
-
 def get_final_shortest_path(all_shortest_paths, start_val):
     visited = set()
 
-    min_dist = defaultdict(lambda: (INF, ()))
-    queue = [(0, start_val, ())]
+    min_dist = defaultdict(lambda: (INF, None))
+    queue = [(0, start_val, frozenset(), ())]
 
     while queue:
-        dist, val, path = queue.pop(0)
-        visited.add(val)
-
+        dist, val, state, path = queue.pop(0)
         path = (*path, val)
+        key = (val, state)
 
-        for other_val, (_dist, obstacles) in all_shortest_paths[val].items():
-            if any(x not in path for x in obstacles):
-                print(other_val, _dist, obstacles, path)
-                continue
-            if other_val in visited:
-                continue
+        if key not in visited:
+            visited.add(key)
 
-            prev_cost, _ = min_dist[other_val]
-            new_cost = dist + _dist
+            for other_val, (_dist, obstacles) in all_shortest_paths[val].items():
+                if not _can_move_past_obstacles(state, obstacles):
+                    continue
 
-            if new_cost < prev_cost:
-                min_dist[other_val] = (new_cost, path)
-                heappush(queue, (new_cost, other_val, path))
+                other_state = _add_to_state_if_key(state, other_val)
+                other_key = (other_val, other_state)
+
+                if val == 'c':
+                    print(other_key)
+
+                prev_cost, _ = min_dist[other_key]
+                new_cost = dist + _dist
+
+                if new_cost < prev_cost:
+                    min_dist[other_key] = new_cost, path
+                    heappush(queue, (new_cost, other_val, other_state, path))
 
     return min_dist
+
+
+def _add_to_state_if_key(state, val):
+    if val.islower():
+        state = frozenset([*state, val])
+    return state
+
+
+def _can_move_past_obstacles(state, obstacles):
+    return all(key in state for key in obstacles)
 
 
 if __name__ == '__main__':
     world_map = """
 ########################
-#...............b.C.D.f#
-#.######################
-#.....@.a.B.c.d.A.e.F.g#
+#f.D.E.e.C.b.A.@.a.B.c.#
+######################.#
+#d.....................#
 ########################
     """
     world_map = list(clean_lines_iter(world_map))
@@ -129,6 +126,12 @@ if __name__ == '__main__':
         sp.update(shortest_path(k, _passage, world_map))
 
     spf = get_final_shortest_path(sp, '@')
-    print(spf)
-    print(min(filter(lambda x: len(x[1]) == len(_keys) + 1, spf), key=lambda x: x[0]))
+    best = INF
+    for (val, state), (cost, path) in spf.items():
+        if len(state) < len(_keys):
+            continue
+        if cost < best:
+            print(val, path)
+            best = cost
+    print(best)
 
