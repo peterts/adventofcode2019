@@ -16,6 +16,7 @@ def deal(n, cards):
     leftmost = 0
     for i in range(m):
         j = (i*n + leftmost) % m
+        # i * n + leftmost = k * m + j
         if new_cards[j] is not None:
             leftmost += 1
             j += 1
@@ -40,11 +41,11 @@ def parse_line(line):
 
 
 if __name__ == '__main__':
-    cards = list(range(119315717514047))
+    cards = list(range(10007))
 
-    for line in read_line_separated_list("cards.txt"):
-        func = parse_line(line)
-        cards = func(cards)
-
-    print(cards.index(2019))
+    for i in range(100):
+        for line in read_line_separated_list("cards.txt"):
+            func = parse_line(line)
+            cards = func(cards)
+        print([x-y for x, y in zip(cards, cards[1:])])
 

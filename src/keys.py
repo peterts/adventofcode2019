@@ -1,40 +1,10 @@
-from src.helpers import clean_lines_iter
 import re
 from collections import defaultdict
-from heapq import heappush
-from dataclasses import dataclass, field
-
-
-@dataclass
-class World:
-    keys: list
-    doors: list
-    passage: dict
-    map: list
-
-    def get(self, pos):
-        i, j = pos
-        return self.map[i][j].lower()
-
-
-@dataclass
-class State:
-    pos: tuple
-    cost: int = 0
-    has_keys: tuple = field(default_factory=tuple)
-    opened_doors: tuple = field(default_factory=tuple)
-
-    def add_key_and_copy(self, key_pos, key_val, cost):
-        return State(key_pos, self.cost + cost, (*self.has_keys, key_val), self.opened_doors)
-
-    def add_door_and_copy(self, door_pos, door_val, cost):
-        return State(door_pos, self.cost + cost, self.has_keys, (*self.opened_doors, door_val))
-
-    def __eq__(self, other):
-        return self.cost == other.cost
-
-    def __lt__(self, other):
-        return self.cost < other.cost
+from src.helpers import clean_lines_iter
+from frozendict import frozendict
+from heapq import heappush, heappop
+from copy import deepcopy
+from functools import lru_cache
 
 
 def find_x(world_map, x):
@@ -42,34 +12,7 @@ def find_x(world_map, x):
     for i, line in enumerate(world_map):
         for match in re.finditer(x, line):
             found.append((i, match.start()))
-    return found
-
-
-def shortest_path(world: World, state: State):
-    if len(state.has_keys) == len(world.keys):
-        return state
-
-    new_keys, doors_that_can_be_opened = search(world, state)
-
-    if (len(new_keys) + len(doors_that_can_be_opened)) == 1:
-        if new_keys:
-            key_dist, key = new_keys.pop(0)
-            return shortest_path(world, state.add_key_and_copy(key, world.get(key), key_dist))
-        else:
-            door_dist, door = doors_that_can_be_opened.pop(0)
-            return shortest_path(world, state.add_door_and_copy(door, world.get(door), door_dist))
-
-    else:
-        costs = []
-        for key_dist, key in new_keys:
-            potential_state = shortest_path(world, state.add_key_and_copy(key, world.get(key), key_dist))
-            heappush(costs, potential_state)
-
-        for door_dist, door in doors_that_can_be_opened:
-            potential_state = shortest_path(world, state.add_door_and_copy(door, world.get(door), door_dist))
-            heappush(costs, potential_state)
-
-        return costs.pop(0)
+    return set(found)
 
 
 def parse_passage(passage):
@@ -88,61 +31,184 @@ def is_connected(pos, other_pos):
            ((pos[1] == other_pos[1]) and abs(pos[0] - other_pos[0]) == 1)
 
 
-def search(world: World, state: State):
-    new_keys = []
-    doors_that_can_be_opened = []
-    visisted = set()
-
-    queue = [(state.pos, 0)]
+def shortest_path(start, passages, world_map):
+    visited = set()
+    paths = dict()
+    queue = [(start, 0, ())]
 
     while queue:
-        pos, dist = queue.pop(0)
-        visisted.add(pos)
+        pos, dist, obstacles = queue.pop(0)
+        visited.add(pos)
 
-        if pos in world.doors:
-            door = world.get(pos)
-            if door not in state.has_keys:
+        val = _get(world_map, pos)
+        if val.islower() or val == "@":
+            paths[val] = (dist, obstacles)
+        elif val.isupper():
+            obstacles = (*obstacles, val.lower())
+
+        for other_pos in passages[pos]:
+            if other_pos in visited:
                 continue
-            elif door not in state.opened_doors:
-                heappush(doors_that_can_be_opened, (dist, pos))
+            queue.append((other_pos, dist + 1, obstacles))
+
+    start_val = _get(world_map, start)
+    paths.pop(start_val)
+    return {start_val: paths}
+
+
+def _get(arr, pos):
+    i, j = pos
+    return arr[i][j]
+
+
+INF = 1e9
+
+
+def get_final_shortest_path(all_shortest_paths, start_val, n_keys):
+    visited = set()
+    min_dist = defaultdict(lambda: INF)
+    queue = [(0, start_val, frozenset())]
+
+    while queue:
+        dist, val, state, = heappop(queue)
+        key = (val, state)
+
+        if key not in visited:
+            visited.add(key)
+
+            if len(state) == n_keys:
                 continue
 
-        elif pos in world.keys:
-            if world.get(pos) not in state.has_keys:
-                heappush(new_keys, (dist, pos))
-                continue
+            state = _add_to_state_if_key(state, val)
+            for other_val, (_dist, obstacles) in all_shortest_paths[val].items():
+                if not _can_move_past_obstacles(state, obstacles):
+                    continue
 
-        for connected_pos in world.passage[pos]:
-            if connected_pos in visisted:
-                continue
-            queue.append((connected_pos, dist+1))
+                other_state = _add_to_state_if_key(state, other_val)
+                other_key = (other_val, other_state)
 
-    return new_keys, doors_that_can_be_opened
+                new_cost = dist + _dist
+                if new_cost < min_dist[other_key]:
+                    min_dist[other_key] = new_cost
+                    heappush(queue, (new_cost, other_val, other_state))
+
+    return lowest_dist(min_dist)
+
+
+def lowest_dist(min_dist_per_node):
+    best = INF
+    for (val, state), cost in min_dist_per_node.items():
+        if len(state) < len(_keys):
+            continue
+        if cost < best:
+            best = cost
+    return best
+
+
+def _add_to_state_if_key(state, val):
+    if val.islower():
+        state = frozenset([*state, val])
+    return state
+
+
+def _can_move_past_obstacles(state, obstacles):
+    return all(key in state for key in obstacles)
 
 
 if __name__ == '__main__':
-    _map = """
-#################
-#i.G..c...e..H.p#
-########.########
-#j.A..b...f..D.o#
-########@########
-#k.E..a...g..B.n#
-########.########
-#l.F..d...h..C.m#
-#################
+    world_map = """
+#################################################################################
+#.......#.......#.......O...#.D.........#.......#.......#.....U...#...#.......#.#
+#.#####.#.#######.#####.#.###.#########.#####.#.#.###.###.#.###.###.#.#.###.#.#.#
+#...#.#.#............j#.#.#...#.....#b..#.....#.#.#.#.#...#.#...#...#...#...#...#
+#.#.#.#.#.###########.#.#.#.###.#.###.###.#######.#.#.#.###.#####.#######.#####.#
+#v#.#.#.#.#.#...#.....#.#.#.#...#.#...#.#...#.....#.#...#.#...#...#.......#.....#
+#.#.#.#.#.#.#.#.#######.#.#.#.#####.###.#.#.#.#####.#####.###.#.###.###########.#
+#.#.#r#.#...#.#...#.....#.#.#.#.....#...#.#...#.......#.....#.....#.....A.....#.#
+###.#.#.###.#.###.#.#####.#.#.#.#######.#.#####.#####.#.#########.#########.#.#.#
+#...#...#...#.#.....#.....#...#.#.....#.#.#.....#.....#...#...#.....#.....#.#.#.#
+#.###.###.###.#.#######.###.###.###.#.#.#.#.#####.#######.#.#.#######.###.###.###
+#.#.....#.#...#.#.....#.#...#...#...#.N.#.#.#...#.......#.#.#...#...#s..#...#...#
+#.#####.###.#####.###.###.###.###.#######.#.#.#.#######.#.#C###.#.#.###.###.###.#
+#...#.......#.....#.#.......#.#...#.....#.#...#.#.#.....#.#...#..c#...#.#...X.#.#
+#.#.#.#######.#####.#########.#.###.###.#.#####.#.#.#####.###.#######Y#.#####.#.#
+#.#.#.#...#...#.....#.........#.......#.#.......#...#.......#g......#.#.....#...#
+#.#.###.#.#.#######.#.#########.#######.#########.###.#.###########.#.#####.###.#
+#.#.....#.#.......#.#.#.......#...#.....#.#.......#...#...........#.#.......#...#
+#######.#.#######.#.#.###.###.#####.###.#.#.#######.#############.#.#########.###
+#.....#.#.......#...#...#...#...#...#...#.#.....#...#.....#.......#...#.....#.#.#
+#.###.###.#####.###.###.#.#.###.#.###.###.#####.#.#######.#Q#######.#.###.###.#.#
+#.#...#...#...#.#...#...#.#...#...#.#...#.#.....#.........#.#...P.#.#.G.#.....#.#
+#.###.#.###.###.#.#########.#.#####.###.#.#.###############.#####.#.###.#.#####.#
+#...#...#...#...#.........#.#.#.....#...#.#.#.......#.........#...#...#.#.....#.#
+###.#####.###.###########.###.###.###.###.#.#.###.#.#.#####.###.#####.#.#####.#.#
+#...#...#...#.#.......#.#...#...#.......#...#...#.#.#...#...#...#.....#i..#.#...#
+#.###.###.#.#.#####.#.#.###.###.#######.#.#######.#.###.#.###.#########.#.#.###.#
+#.#...#...#.#...#...#.....#...#.....#...#.#.......#.....#.#p..#.......#.#.#.#...#
+#.#.#.#.###.###.#.#.#####.###.#####.#####.###.#########.###.###.#####.###.#.#.###
+#.#.#...#.#...#.#.#.#...#...#.....#.....#...#.#...#.....#...#...#.#..l#...#.....#
+#.###.###.###.#.#.###.#.###.#####.#####.###.#.#.#.#######.###L###.#.###.#########
+#...#.#.....#...#.....#.#.#...#..e#.....#...#...#.....#.Z.#...#..t#.T.#......w..#
+###.#.#.###.###########.#.###.#.###.#####.###.#######.#.###.###.#.###.#.#######.#
+#...#.#.#.#.........#...#...#.#.#....h..#.#...#.......#.#...#.F.#...#.#.I.....#.#
+#.###.#.#.#.#######.#.###.###.#.#.#####.#.#####.#####.#.#.###.#####.#.#.#######.#
+#.#.....#...#.....#.#.#.......#.#.#...#.#.......#.#...#..z#.#.....#...#.#..k..#.#
+#.#########.#.###.#.#.#########.#.#.#.#.#########.#.#######.#####.#######.###.#.#
+#...M.#...#.#.#.#.#...#.....#...#.#.#...#...#.....#.#.........#...#.......#.#.#.#
+#.###.#.#.###.#.#.#####.###.#.#####.###.#.#.#.#.###.###.#####.#.###.#######.#W#.#
+#...#...#.......#.........#.........#.....#...#.........#.....#fK...#...........#
+#######################################.@.#######################################
+#.......#.........#...................#.......#.........#...........#...........#
+#.###.###.#.#######.#####.#.#########.#.#.###.#.#####.#.#.#########.#.#######.#.#
+#.#...#...#.........#...#.#.#.......#...#...#.#.#...#.#.#.#.#.....#.#.......#.#.#
+#.#.###.#############.#.###.#.#####.###.###.###.#.#.#.###.#.#.#.###.#####.###.#.#
+#.#...#.#.........#...#...#.#.....#...#.#...#...#.#.#.....#...#...#...#...#...#.#
+#.#####.#########.#.#####.#.#####.#.###.#.#.#.#####.#############.###.#.###.###.#
+#.......#...#...#.#.....#.#...#...#.#...#.#.#...#.........#.....#.#...#...#...#.#
+#.#######.#.#.#.#.#####.#.#.#.#.###.#.###.#.###.#.#######.#.###.#.#.#####.###.###
+#...#.....#...#.....#...#.#.#.#.#...#...#.#.#.#.#...#.....#...#...#.#.......#...#
+###.#.#.#########.###.###.###.#.#.#####.#.#.#.#.###.#####.###.#####.#.#########.#
+#.#.#.#.#.....#...#...#.#.....#.#...#...#.#...#...#..m..#...#.....#.#.....#...#.#
+#.#.###.#.###.#####.###.#######.#####.###.#######.#####.###.#####.#.#.#####.#.#.#
+#.#..q..#.#.#.#.....#...............#...#.......#.....#...#.#.....#.#.#...#.#...#
+#.#.#####.#.#.#.###.#######.#######.###.#.#####.#####.#.#.#.#.###.#.#.#.#.#.###.#
+#...#.....#.....#...#.....#.#.....#.....#...#.#.H.#...#.#.#...#...#.#.#.#...#.#.#
+#.###.#.#########.###.###.###.###.#########.#.###.#.#####.#####.###.#.#.#####.#.#
+#.#.#.#.#...#...#...#.#.......#.#.#.....#.#.#...#.........#.....#...#.#.#.....#.#
+#.#.#.###.#.#.#.###.#.#########.#.#.###.#.#.#.###################.###.#.###.#.#.#
+#...#.....#...#.#.#.#...#.......#...#.#.#.#.#.......#.....#.....#.#...#...#.#.#.#
+###.###########.#.#.###.#.#####.#####.#.#.#.#######.#.###.#.###.#.#######.###.#.#
+#...#.........#.#...#...#.#...#.......#.#...#.....#.#.#.#...#...#.....#...#...#.#
+#.###.#######.#.###########.#.#.#.###.#.#.###.###.#.#.#.#############.#.###.#.#.#
+#.#...#.#.......#.........#.#.#.#.#...#.#.#.....#...#...#.........#...#...#.#.#.#
+#.#.###.#.#####.#.###.###.#.#.###.#####.#.#####.#######.#.###.###.#.###.#.#.###.#
+#.#.#.#...#...#.#.#.#.#.....#...#.#.....#.......#.......#...#.#...#...#.#.#.....#
+###.#.#.###.#.###.#.#.#########.#.#.###########.#.###########.#.#####.#.#.#####.#
+#...#...#...#.....#.#.........#...#.#...#.....#.#.....#.......#.#.....#.#.....#.#
+#.###.###.#########.#########.#####.###.#####.#.#####.###.#####.#.#####.#####R#J#
+#.#.#...#.#.......#.....#...#o......#...#.....#.E...#.....#...#...#.....#.#...#.#
+#.#.#.###.#.###.#.#.###.###.#########.###.#########.#########.#########.#.#.#####
+#.#...#...#...#.#.#...#...........#.....#.#.......#...#.....#.........#.#.#.....#
+#.#####.#####.#.#.#.#.###########.#.###.#.#.#.#.#####.#.###.#.#.#####.#.#.#####.#
+#.#.....#.....#.#.#.#.#......a....#...#.#...#.#.#...#.#...#.#.#...#...#.....#...#
+#.#.###########.#.###.#.###############.#.###.#.#.#.#.###.#.#####.###.#######.#.#
+#...#u......#...#.....#...#.......#...#.#...#.#.#.#.#.#...#.#...#...#.B...#...#.#
+#.#######.#.#.###########.#.#####.#.#.#.###.#.###.#.#.#.###.#.#.###.#####.#.###.#
+#.#.....#.#.#...#...#...#x#...#.#.#.#...#.#.#.....#.#.#.#.#.#.#...#..d#...#.V.#.#
+#.###.#.#.#.###.#.#.#.#.#.###.#.#.#S###.#.#.#######.#.#.#.#.#.###.###.#.#####.#.#
+#.....#...#.....#.#...#.......#.....#..y#.........#.....#n....#.......#.......#.#
+#################################################################################
     """
-    _map = list(clean_lines_iter(_map))
-    _door = find_x(_map, "@")[0]
-
-    _keys = find_x(_map, "[a-z]")
-
-    _doors = find_x(_map, "[A-Z]")
-
-    _passage = find_x(_map, "[a-zA-Z@.]")
+    world_map = list(clean_lines_iter(world_map))
+    _door = list(find_x(world_map, "@"))[0]
+    _keys = find_x(world_map, "[a-z]")
+    _doors = find_x(world_map, "[A-Z]")
+    _passage = find_x(world_map, "[a-zA-Z@.]")
     _passage = parse_passage(_passage)
 
-    world = World(_keys, _doors, _passage, _map)
-    state = State(_door)
+    sp = shortest_path(_door, _passage, world_map)
+    for k in _keys:
+        sp.update(shortest_path(k, _passage, world_map))
 
-    print(shortest_path(world, state))
+    lowest = get_final_shortest_path(sp, '@', len(_keys))
+    print(lowest)
