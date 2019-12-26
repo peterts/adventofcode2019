@@ -1,5 +1,5 @@
 from functools import partial
-from src.helpers import read_comma_separated_list
+from src.helpers import read_comma_separated_list, clean_lines_iter
 from collections import defaultdict
 
 STATE_RUNNING = 0
@@ -13,7 +13,10 @@ class IntProgram:
         self.n_op_digits = n_op_digits
         self.always_move_pointer = always_move_pointer
 
-        self.memory = defaultdict(int, enumerate(memory))
+        if isinstance(memory, list):
+            memory = defaultdict(int, enumerate(memory))
+        self.memory = memory
+
         self.relative_base = 0
         self.pointer = 0
         self.output = []
@@ -73,6 +76,21 @@ class IntProgram:
     def move_pointer(self, i_out, steps):
         if (i_out != self.pointer) or self.always_move_pointer:
             self.pointer += steps
+
+
+class AsciiProgram(IntProgram):
+    def run(self, inp=None):
+        parsed_inp = None
+        if inp is not None:
+            parsed_inp = []
+            for line in clean_lines_iter(inp):
+                parsed_inp.extend(map(ord, line))
+                parsed_inp.append(10)
+        return super().run(parsed_inp)
+
+    @property
+    def parsed_output(self):
+        return "".join(map(chr, self.output))
 
 
 operations = set()

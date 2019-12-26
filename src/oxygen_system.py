@@ -1,4 +1,4 @@
-from src.helpers import read_comma_separated_list, plot
+from src.helpers import read_comma_separated_list, plot_arr
 from collections import defaultdict
 from heapq import heappush
 from src.int_program import IntProgram
@@ -90,7 +90,7 @@ if __name__ == '__main__':
     world, shortest_path = create_map_of_area(memory, False)
     start_pos = go_to(0, 0, shortest_path)
 
-    plot(world)
+    plot_arr(world)
     print(len(shortest_path))
     print(get_longest_path(world, start_pos))
 

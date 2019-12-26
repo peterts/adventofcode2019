@@ -1,51 +1,84 @@
-from functools import partial
-from src.helpers import read_line_separated_list
+"""
+Only day I had to cheat. Thanks for the explanation mcpower_
+(https://www.reddit.com/r/adventofcode/comments/ee0rqi/2019_day_22_solutions/fbnkaju/)
+"""
+from dataclasses import dataclass
+from src.helpers import modinv, read_line_separated_list
 
 
-def deal_new_stack(cards):
-    return cards[::-1]
+@dataclass
+class Deck:
+    size: int
+    first_card: int = 0
+    increment: int = 1
+    card_num: int = 0
 
+    def new_stack(self):
+        self.increment *= -1
+        self.first_card += self.increment
 
-def cut_n_cards(n, cards):
-    return cards[n:] + cards[:n]
+    def cut(self, n):
+        self.first_card += self.increment * n
 
+    def deal(self, n):
+        self.increment *= modinv(n, self.size)
 
-def deal(n, cards):
-    m = len(cards)
-    new_cards = [None] * m
-    leftmost = 0
-    for i in range(m):
-        j = (i*n + leftmost) % m
-        # i * n + leftmost = k * m + j
-        if new_cards[j] is not None:
-            leftmost += 1
-            j += 1
-        new_cards[j] = cards[i]
-    return new_cards
+    def get_card(self, card_num):
+        return (card_num * self.increment + self.first_card) % self.size
 
+    def __iter__(self):
+        self.card_num = 0
+        return self
 
-commands = (
-    ("deal into new stack", deal_new_stack),
-    ("deal with increment", deal),
-    ("cut", cut_n_cards)
-)
+    def __next__(self):
+        if self.card_num < self.size:
+            return_val = self.get_card(self.card_num)
+            self.card_num += 1
+            return return_val
+        raise StopIteration
 
+    def exec(self, command_str):
+        commands = (
+            ("deal into new stack", self.new_stack),
+            ("deal with increment", self.deal),
+            ("cut", self.cut)
+        )
 
-def parse_line(line):
-    for command, func in commands:
-        if line[:len(command)] == command:
-            if len(line) > len(command):
-                n = int(line[len(command):])
-                return partial(func, n)
-            return func
+        for command_key, command_func in commands:
+            if command_str.startswith(command_key):
+                if len(command_str) > len(command_key):
+                    command_func(int(command_str[len(command_key):]))
+                else:
+                    command_func()
+
+    def exec_all(self, commands_iter):
+        for command_str in commands_iter:
+            self.exec(command_str)
+
+    def exec_all_n_times(self, commands_iter, n):
+        self.exec_all(commands_iter)
+
+        increment_multiplier_per_pass = self.increment
+        first_card_after_initial_pass = self.first_card
+
+        self.increment = pow(increment_multiplier_per_pass, n, self.size)
+        self.first_card = first_card_after_initial_pass * (1 - self.increment) * modinv(1 - increment_multiplier_per_pass, self.size)
 
 
 if __name__ == '__main__':
-    cards = list(range(10007))
+    deck = Deck(10007)
+    commands_iter = read_line_separated_list("cards.txt")
+    deck.exec_all(commands_iter)
 
-    for i in range(100):
-        for line in read_line_separated_list("cards.txt"):
-            func = parse_line(line)
-            cards = func(cards)
-        print([x-y for x, y in zip(cards, cards[1:])])
+    cards = list(deck)
+    print(cards.index(2019))
+
+    deck2 = Deck(119315717514047)
+    n_passes = 101741582076661
+    deck2.exec_all_n_times(commands_iter, n_passes)
+    print(deck2.get_card(2020))
+
+
+
+
 

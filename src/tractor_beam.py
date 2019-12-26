@@ -1,4 +1,4 @@
-from src.helpers import read_comma_separated_list, plot, read_line_separated_list
+from src.helpers import read_comma_separated_list, plot_arr, read_line_separated_list
 from src.int_program import IntProgram
 from collections import defaultdict
 import numpy as np
@@ -75,7 +75,7 @@ if __name__ == '__main__':
             picture[(y, x)] = get_val_at_xy(x, y)
 
     print(sum(picture.values()))
-    plot(picture)
+    plot_arr(picture)
 
     start_x = 0
     width = 1

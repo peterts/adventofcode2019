@@ -24,6 +24,8 @@ def run_and_check_for_duplicate(grid):
     while grid_tup not in memo:
         memo.add(grid_tup)
         grid = update(grid)
+        print_grid(grid, 5, 5)
+        return grid
         grid_tup = grid_to_tuple(grid)
     return grid
 

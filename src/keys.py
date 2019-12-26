@@ -1,5 +1,5 @@
 import re
-from src.helpers import clean_lines_iter
+from src.helpers import clean_lines_iter, read
 from heapq import heappush, heappop
 from collections import defaultdict
 
@@ -38,7 +38,7 @@ def shortest_path(start, passages, world_map):
         visited.add(pos)
 
         val = _get(world_map, pos)
-        if val.islower() or val == "@":
+        if val.islower() or val.isnumeric():
             paths[val] = (dist, obstacles)
         elif val.isupper():
             obstacles = (*obstacles, val.lower())
@@ -50,7 +50,7 @@ def shortest_path(start, passages, world_map):
 
     start_val = _get(world_map, start)
     paths.pop(start_val)
-    return start_val, paths
+    return {start_val: paths}
 
 
 def _get(arr, pos):
@@ -61,15 +61,15 @@ def _get(arr, pos):
 INF = 1e9
 
 
-def get_final_shortest_path(all_shortest_paths, start_val, n_keys):
+def get_final_shortest_path(all_shortest_paths, common_paths, key_to_robot, start_val, n_keys):
+
     visited = set()
     min_dist = defaultdict(lambda: INF)
-    queue = [(0, start_val, frozenset())]
+    queue = [(0, start_val, frozenset(), common_paths)]
 
     while queue:
-        dist, val, state, = heappop(queue)
+        dist, val, state, _common_paths = heappop(queue)
         key = (val, state)
-        print(key, dist)
 
         if key not in visited:
             visited.add(key)
@@ -78,7 +78,7 @@ def get_final_shortest_path(all_shortest_paths, start_val, n_keys):
                 continue
 
             state = _add_to_state_if_key(state, val)
-            for other_val, (_dist, obstacles) in all_shortest_paths[val].items():
+            for other_val, (_dist, obstacles) in {**all_shortest_paths[val], **_common_paths}.items():
                 if not _can_move_past_obstacles(state, obstacles):
                     continue
 
@@ -88,7 +88,8 @@ def get_final_shortest_path(all_shortest_paths, start_val, n_keys):
                 new_cost = dist + _dist
                 if new_cost < min_dist[other_key]:
                     min_dist[other_key] = new_cost
-                    heappush(queue, (new_cost, other_val, other_state))
+                    other_common_paths = _replace_in_common_paths(other_val, _common_paths, key_to_robot)
+                    heappush(queue, (new_cost, other_val, other_state, other_common_paths))
 
     return lowest_dist(min_dist)
 
@@ -113,33 +114,46 @@ def _can_move_past_obstacles(state, obstacles):
     return all(key in state for key in obstacles)
 
 
+def _replace_in_common_paths(key, common_paths, key_to_robot):
+    robot = key if key.isnumeric() else key_to_robot[key]
+    for old_key in common_paths:
+        if old_key == robot or (old_key.isalpha() and key_to_robot[old_key] == robot):
+            break
+    common_paths = dict(common_paths)
+    common_paths.pop(old_key)
+    common_paths[key] = (0, ())
+    return common_paths
+
+
 if __name__ == '__main__':
-    world_map = """
-#######
-#a.#Cd#
-##@#@##
-#######
-##@#@##
-#cB#.b#
-#######
-    """
+    world_map = read("keys2.txt")
+
+    i = 0
+    while '@' in world_map:
+        world_map = world_map.replace('@', str(i), 1)
+        i += 1
+
     world_map = list(clean_lines_iter(world_map))
-    _robots = list(find_x(world_map, "@"))
+    _robots = list(find_x(world_map, r"\d"))
     _keys = find_x(world_map, "[a-z]")
     _doors = find_x(world_map, "[A-Z]")
-    _passage = find_x(world_map, "[a-zA-Z@.]")
+    _passage = find_x(world_map, r"[a-zA-Z\d.]")
     _passage = parse_passage(_passage)
 
-    sp = defaultdict(dict)
+    all_shortest_paths = {}
+    for x in _robots + list(_keys):
+        all_shortest_paths.update(shortest_path(x, _passage, world_map))
+
+    # Find out which robot each key "belongs to"
+    key_to_robot = {}
+    common_paths = {}
     for r in _robots:
-        key, paths = shortest_path(r, _passage, world_map)
-        sp[key].update(paths)
-    for k in _keys:
-        key, paths = shortest_path(k, _passage, world_map)
-        sp[key].update(paths)
+        rnum = _get(world_map, r)
+        for k in all_shortest_paths[rnum]:
+            assert k not in key_to_robot
+            key_to_robot[k] = rnum
 
-    for k, v in sp.items():
-        print(k, v)
+        common_paths[rnum] = (0, ())
 
-    lowest = get_final_shortest_path(sp, '@', len(_keys))
+    lowest = get_final_shortest_path(all_shortest_paths, common_paths, key_to_robot, '0', len(_keys))
     print(lowest)
